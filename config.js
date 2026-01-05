@@ -1,181 +1,545 @@
-// Configuration for the Bingo Game
+// config.js - Secure Configuration for Bingo Game
+// Compatible with GitHub and Deno deployment
 
-// Backend API URLs
-const IS_PRODUCTION = window.location.hostname !== 'localhost' && 
-                      window.location.hostname !== '127.0.0.1';
-
-export const API_BASE_URL = IS_PRODUCTION
-    ? 'https://assefa-bingo-backend.deno.dev'
-    : 'http://localhost:8000';
-
-export const WS_URL = IS_PRODUCTION
-    ? 'wss://assefa-bingo-backend.deno.dev/ws'
-    : 'ws://localhost:8000/ws';
-
-// WebRICE ICE Servers (STUN/TURN)
-export const ICE_SERVERS = [
-    // Google STUN servers
-    {
-        urls: [
-            'stun:stun1.l.google.com:19302',
-            'stun:stun2.l.google.com:19302',
-            'stun:stun3.l.google.com:19302',
-            'stun:stun4.l.google.com:19302'
-        ]
-    },
-    // Twilio STUN servers (free tier)
-    {
-        urls: [
-            'stun:global.stun.twilio.com:3478'
-        ]
-    },
-    // Add TURN servers if available (requires credentials)
-    /*
-    {
-        urls: 'turn:your-turn-server.com:3478',
-        username: 'username',
-        credential: 'password'
+// ===== ENVIRONMENT DETECTION =====
+export const ENVIRONMENT = (() => {
+    const hostname = window.location.hostname;
+    
+    if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+        return 'development';
+    } else if (hostname.includes('test') || hostname.includes('staging')) {
+        return 'staging';
+    } else if (hostname.includes('github.io')) {
+        return 'github';
+    } else {
+        return 'production';
     }
-    */
+})();
+
+console.log(`🌍 Environment: ${ENVIRONMENT}`);
+
+// ===== BACKEND CONFIGURATION =====
+
+// Primary Backend Server (Updated with provided URL)
+const PRIMARY_BACKEND = {
+    ws: 'wss://ameng-gogs-mass2-81.deno.dev/ws',
+    api: 'https://ameng-gogs-mass2-81.deno.dev/api',
+    domain: 'ameng-gogs-mass2-81.deno.dev'
+};
+
+// Backup Servers (in case primary fails)
+const BACKUP_SERVERS = [
+    {
+        ws: 'wss://ameng-gogs-mass2-81.deno.dev/ws',
+        api: 'https://ameng-gogs-mass2-81.deno.dev/api',
+        name: 'Primary Server'
+    },
+    {
+        ws: 'wss://bingo-backup-1.deno.dev/ws',
+        api: 'https://bingo-backup-1.deno.dev/api',
+        name: 'Backup Server 1'
+    },
+    {
+        ws: 'wss://bingo-backup-2.deno.dev/ws',
+        api: 'https://bingo-backup-2.deno.dev/api',
+        name: 'Backup Server 2'
+    }
 ];
 
-// Game Configuration
+// Local development server
+const LOCAL_SERVER = {
+    ws: 'ws://localhost:8000/ws',
+    api: 'http://localhost:8000/api',
+    domain: 'localhost'
+};
+
+// GitHub Pages configuration
+const GITHUB_CONFIG = {
+    ws: 'wss://ameng-gogs-mass2-81.deno.dev/ws',
+    api: 'https://ameng-gogs-mass2-81.deno.dev/api',
+    domain: 'ameng-gogs-mass2-81.deno.dev'
+};
+
+// ===== EXPORTED CONFIGURATION =====
+
+// WebSocket URLs
+export const WS_URL = (() => {
+    switch (ENVIRONMENT) {
+        case 'development':
+            return LOCAL_SERVER.ws;
+        case 'github':
+            return GITHUB_CONFIG.ws;
+        case 'production':
+        case 'staging':
+        default:
+            return PRIMARY_BACKEND.ws;
+    }
+})();
+
+// Backup WebSocket URLs (for failover)
+export const WS_BACKUP_URLS = [
+    ...BACKUP_SERVERS.map(server => server.ws),
+    GITHUB_CONFIG.ws,
+    LOCAL_SERVER.ws
+].filter((url, index, self) => 
+    url !== WS_URL && self.indexOf(url) === index // Remove duplicates and primary
+);
+
+// API Base URLs
+export const API_BASE_URL = (() => {
+    switch (ENVIRONMENT) {
+        case 'development':
+            return LOCAL_SERVER.api;
+        case 'github':
+            return GITHUB_CONFIG.api;
+        case 'production':
+        case 'staging':
+        default:
+            return PRIMARY_BACKEND.api;
+    }
+})();
+
+// Backup API URLs
+export const API_BACKUP_URLS = [
+    ...BACKUP_SERVERS.map(server => server.api),
+    GITHUB_CONFIG.api,
+    LOCAL_SERVER.api
+].filter((url, index, self) => 
+    url !== API_BASE_URL && self.indexOf(url) === index
+);
+
+// ===== GAME CONFIGURATION =====
+
 export const GAME_CONFIG = {
-    // Game types
-    GAME_TYPES: ['75ball', '90ball', '30ball', '50ball', 'pattern', 'coverall'],
+    // Game Types
+    gameTypes: {
+        '75ball': {
+            name: '75 Ball Bingo',
+            numbers: 75,
+            patterns: ['Full House', 'Line', 'Four Corners', 'X Pattern'],
+            gridSize: 5,
+            columns: ['B', 'I', 'N', 'G', 'O'],
+            stakes: [5, 10, 25, 50, 100]
+        },
+        '90ball': {
+            name: '90 Ball Bingo',
+            numbers: 90,
+            patterns: ['One Line', 'Two Lines', 'Full House'],
+            gridSize: 9,
+            columns: 10,
+            stakes: [5, 10, 25, 50, 100, 200]
+        },
+        'bingo75': {
+            name: 'Ethiopian Bingo 75',
+            numbers: 75,
+            patterns: ['Full House', 'Cross', 'Diagonal'],
+            gridSize: 5,
+            stakes: [10, 25, 50, 100, 200]
+        },
+        'bingo90': {
+            name: 'Ethiopian Bingo 90',
+            numbers: 90,
+            patterns: ['Full House', 'Star', 'Square'],
+            gridSize: 9,
+            stakes: [10, 25, 50, 100, 200, 500]
+        }
+    },
+
+    // Default game settings
+    defaultGameType: '75ball',
+    defaultStake: 25,
+    minStake: 5,
+    maxStake: 1000,
     
-    // Stake options (in ETB)
-    STAKE_OPTIONS: [25, 50, 100, 200, 500, 1000, 2000, 5000],
+    // Room settings
+    maxPlayersPerRoom: 50,
+    maxRooms: 100,
+    roomIdLength: 6,
     
-    // Payment options
-    PAYMENT_OPTIONS: [25, 50, 100, 200, 500, 1000, 2000, 5000],
+    // Game timing
+    gameStartDelay: 5000, // 5 seconds
+    numberCallInterval: 3000, // 3 seconds
+    winClaimTimeout: 10000, // 10 seconds
     
-    // Service charge percentage
-    SERVICE_CHARGE: 0.03, // 3%
+    // Payment settings
+    minPaymentAmount: 10,
+    maxPaymentAmount: 10000,
+    paymentMethods: ['TeleBirr', 'CBE Birr', 'Dashen Bank', 'Awash Bank', 'Cash'],
     
-    // Win multiplier
-    WIN_MULTIPLIER: 0.8,
+    // Withdrawal settings
+    minWithdrawalAmount: 50,
+    maxWithdrawalAmount: 5000,
+    withdrawalFee: 0.05, // 5%
     
-    // Maximum players per room
-    MAX_PLAYERS_PER_ROOM: 90,
+    // Currency
+    currency: 'ETB',
+    currencySymbol: 'ብር',
     
-    // Number call interval (ms)
-    CALL_INTERVAL: 7000,
-    
-    // Auto-reconnect attempts
-    MAX_RECONNECT_ATTEMPTS: 5,
-    
-    // Reconnect delay (ms)
-    RECONNECT_DELAY: 3000,
-    
-    // Heartbeat interval (ms)
-    HEARTBEAT_INTERVAL: 30000,
-    
-    // Session timeout (ms)
-    SESSION_TIMEOUT: 300000, // 5 minutes
+    // Security
+    sessionTimeout: 3600000, // 1 hour
+    maxLoginAttempts: 5,
+    rateLimitWindow: 60000, // 1 minute
+    rateLimitMax: 100 // requests per minute
 };
 
-// Local Storage Keys
-export const STORAGE_KEYS = {
-    PLAYER_ID: 'bingo_player_id',
-    PLAYER_NAME: 'bingo_player_name',
-    PLAYER_PHONE: 'bingo_player_phone',
-    ROOM_ID: 'bingo_room_id',
-    GAME_STATE: 'bingo_game_state',
-    PENDING_MESSAGES: 'bingo_pending_messages',
-    SETTINGS: 'bingo_settings'
+// ===== WEBRTC CONFIGURATION =====
+
+// ICE Servers for WebRTC (STUN/TURN)
+export const ICE_SERVERS = {
+    production: [
+        // Free STUN servers
+        {
+            urls: [
+                'stun:stun1.l.google.com:19302',
+                'stun:stun2.l.google.com:19302',
+                'stun:stun3.l.google.com:19302',
+                'stun:stun4.l.google.com:19302'
+            ]
+        },
+        {
+            urls: 'stun:global.stun.twilio.com:3478'
+        },
+        {
+            urls: 'stun:stun.services.mozilla.com:3478'
+        }
+    ],
+    
+    // Add TURN servers if available (commented out - add your credentials)
+    /*
+    turn: [
+        {
+            urls: 'turn:your-turn-server.com:3478',
+            username: 'your-username',
+            credential: 'your-password'
+        }
+    ]
+    */
 };
 
-// Default Settings
-export const DEFAULT_SETTINGS = {
-    soundEnabled: true,
-    vibrationEnabled: true,
-    autoMarkNumbers: false,
-    showAnimations: true,
-    language: 'am', // 'am' for Amharic, 'en' for English
-    theme: 'default', // 'default', 'dark', 'light'
-    fontSize: 'medium', // 'small', 'medium', 'large'
-    notificationEnabled: true
+// Current ICE servers based on environment
+export const CURRENT_ICE_SERVERS = ICE_SERVERS.production;
+
+// ===== SECURITY CONFIGURATION =====
+
+export const SECURITY_CONFIG = {
+    // JWT Settings
+    jwt: {
+        headerName: 'Authorization',
+        tokenPrefix: 'Bearer ',
+        localStorageKey: 'bingo_auth_token',
+        refreshInterval: 300000 // 5 minutes
+    },
+    
+    // CORS settings
+    cors: {
+        allowedOrigins: [
+            'https://ameng-gogs-mass2-81.deno.dev',
+            'https://*.github.io',
+            'http://localhost:*',
+            'http://127.0.0.1:*'
+        ],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        headers: ['Content-Type', 'Authorization']
+    },
+    
+    // Encryption
+    encryption: {
+        algorithm: 'AES-GCM',
+        keyLength: 256,
+        ivLength: 12
+    },
+    
+    // Rate limiting
+    rateLimiting: {
+        windowMs: 60000,
+        maxRequests: 100,
+        message: 'Too many requests, please try again later.'
+    },
+    
+    // Input validation
+    validation: {
+        maxNameLength: 50,
+        minNameLength: 2,
+        phoneRegex: /^(\+251|251|0)?9\d{8}$/,
+        emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        passwordMinLength: 6
+    }
 };
 
-// Error Messages
-export const ERROR_MESSAGES = {
-    NETWORK_ERROR: 'የአውታረመረብ ስህተት። እባክዎ እንደገና ይሞክሩ።',
-    SERVER_ERROR: 'የሰርቨር ስህተት። እባክዎ ቆይተው እንደገና ይሞክሩ።',
-    VALIDATION_ERROR: 'ትክክለኛ መረጃ ያስገቡ።',
-    PAYMENT_ERROR: 'የክፍያ ስህተት። እባክዎ እንደገና ይሞክሩ።',
-    GAME_ERROR: 'የጨዋታ ስህተት። እባክዎ እንደገና ይጀምሩ።',
-    AUTH_ERROR: 'የማረጋገጫ ስህተት። እባክዎ እንደገና ይግቡ።',
-    CONNECTION_ERROR: 'የግንኙነት ስህተት። እባክዎ ኢንተርኔትዎን ያረጋግጡ።'
+// ===== ERROR HANDLING CONFIGURATION =====
+
+export const ERROR_CONFIG = {
+    // WebSocket error codes
+    wsErrors: {
+        1000: 'Normal closure',
+        1001: 'Going away',
+        1002: 'Protocol error',
+        1003: 'Unsupported data',
+        1005: 'No status received',
+        1006: 'Abnormal closure',
+        1007: 'Invalid frame payload data',
+        1008: 'Policy violation',
+        1009: 'Message too big',
+        1010: 'Missing extension',
+        1011: 'Internal error',
+        1012: 'Service restart',
+        1013: 'Try again later',
+        1014: 'Bad gateway',
+        1015: 'TLS handshake failed'
+    },
+    
+    // Reconnection settings
+    reconnection: {
+        maxAttempts: 5,
+        initialDelay: 1000,
+        maxDelay: 30000,
+        backoffFactor: 2
+    },
+    
+    // Error messages
+    messages: {
+        connectionFailed: 'Connection to server failed. Please check your internet connection.',
+        serverError: 'Server error occurred. Please try again later.',
+        timeout: 'Request timeout. Please try again.',
+        invalidResponse: 'Invalid response from server.',
+        authenticationFailed: 'Authentication failed. Please login again.',
+        insufficientBalance: 'Insufficient balance. Please add funds.',
+        roomFull: 'Room is full. Please try another room.',
+        gameInProgress: 'Game is already in progress.'
+    }
 };
 
-// Success Messages
-export const SUCCESS_MESSAGES = {
-    REGISTRATION_SUCCESS: 'ምዝገባዎ በተሳካ ሁኔታ ተጠናቅቋል!',
-    PAYMENT_SUCCESS: 'ክፍያዎ በተሳካ ሁኔታ ተጠናቅቋል!',
-    WINNER_SUCCESS: 'እንኳን ደስ ያለህ! አሸናፊ ሆነህ!',
-    WITHDRAWAL_SUCCESS: 'ገንዘብዎ በተሳካ ሁኔታ ተወግዷል!'
+// ===== UI/UX CONFIGURATION =====
+
+export const UI_CONFIG = {
+    // Theme
+    theme: {
+        primaryColor: '#4CAF50',
+        secondaryColor: '#2196F3',
+        accentColor: '#FF9800',
+        dangerColor: '#F44336',
+        successColor: '#4CAF50',
+        backgroundColor: '#f5f5f5',
+        textColor: '#333333',
+        borderRadius: '8px',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+    },
+    
+    // Animations
+    animations: {
+        duration: {
+            fast: '150ms',
+            normal: '300ms',
+            slow: '500ms'
+        },
+        easing: 'cubic-bezier(0.4, 0, 0.2, 1)'
+    },
+    
+    // Responsive breakpoints
+    breakpoints: {
+        mobile: '480px',
+        tablet: '768px',
+        desktop: '1024px',
+        largeDesktop: '1200px'
+    },
+    
+    // Fonts
+    fonts: {
+        primary: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        heading: "'Arial', sans-serif",
+        code: "'Courier New', monospace"
+    }
 };
 
-// Admin Configuration
-export const ADMIN_CONFIG = {
-    PASSWORD: 'asse2123',
-    SECRET_KEY: 'assefa_gashaye_bingo_secret_2024',
-    SESSION_TIMEOUT: 3600000, // 1 hour
-    MAX_LOGIN_ATTEMPTS: 3,
-    LOCKOUT_TIME: 300000, // 5 minutes
-};
+// ===== ANALYTICS & MONITORING =====
 
-// Audio Configuration
-export const AUDIO_CONFIG = {
-    CALL_SOUND: 'https://assets.mixkit.co/sfx/preview/mixkit-bell-notification-933.mp3',
-    WIN_SOUND: 'https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3',
-    ERROR_SOUND: 'https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-946.mp3',
-    SUCCESS_SOUND: 'https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3'
-};
-
-// Feature Flags
-export const FEATURE_FLAGS = {
-    ENABLE_WEBRTC: true,
-    ENABLE_PUSH_NOTIFICATIONS: false,
-    ENABLE_OFFLINE_MODE: true,
-    ENABLE_CHAT: true,
-    ENABLE_VOICE_CALLS: false,
-    ENABLE_SCREEN_SHARING: false,
-    ENABLE_ANALYTICS: true,
-    ENABLE_ADS: false
-};
-
-// Analytics Configuration
 export const ANALYTICS_CONFIG = {
-    GOOGLE_ANALYTICS_ID: '', // Add your GA ID here
-    AMPLITUDE_API_KEY: '', // Add your Amplitude API key here
-    MIXPANEL_TOKEN: '' // Add your Mixpanel token here
+    // Google Analytics (optional)
+    googleAnalyticsId: null, // 'UA-XXXXXXXXX-X'
+    
+    // Error tracking
+    sentryDsn: null, // 'https://xxxxxxxxxxxx@xxxx.ingest.sentry.io/xxxxx'
+    
+    // Performance monitoring
+    enablePerformance: true,
+    performanceThreshold: 100, // ms
+    
+    // Logging levels
+    logLevel: ENVIRONMENT === 'production' ? 'warn' : 'debug',
+    
+    // Event tracking
+    trackEvents: [
+        'game_started',
+        'game_completed',
+        'payment_made',
+        'withdrawal_requested',
+        'player_registered'
+    ]
 };
 
-// Environment Detection
-export const ENVIRONMENT = {
-    isDevelopment: !IS_PRODUCTION,
-    isProduction: IS_PRODUCTION,
-    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
-    isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
-    isAndroid: /Android/.test(navigator.userAgent),
-    isDesktop: !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+// ===== LOCAL STORAGE KEYS =====
+
+export const STORAGE_KEYS = {
+    playerId: 'bingo_player_id',
+    playerName: 'bingo_player_name',
+    playerPhone: 'bingo_player_phone',
+    balance: 'bingo_balance',
+    stake: 'bingo_stake',
+    gameType: 'bingo_game_type',
+    authToken: 'bingo_auth_token',
+    refreshToken: 'bingo_refresh_token',
+    lastRoom: 'bingo_last_room',
+    settings: 'bingo_settings',
+    theme: 'bingo_theme'
 };
+
+// ===== EXPORTED FUNCTIONS =====
+
+/**
+ * Get current backend configuration
+ */
+export function getBackendConfig() {
+    return {
+        environment: ENVIRONMENT,
+        wsUrl: WS_URL,
+        apiUrl: API_BASE_URL,
+        backupUrls: WS_BACKUP_URLS,
+        isSecure: WS_URL.startsWith('wss://')
+    };
+}
+
+/**
+ * Check if connection is secure
+ */
+export function isConnectionSecure() {
+    return window.location.protocol === 'https:' && WS_URL.startsWith('wss://');
+}
+
+/**
+ * Get appropriate game configuration based on game type
+ */
+export function getGameConfig(gameType = '75ball') {
+    return GAME_CONFIG.gameTypes[gameType] || GAME_CONFIG.gameTypes['75ball'];
+}
+
+/**
+ * Validate phone number
+ */
+export function validatePhoneNumber(phone) {
+    return SECURITY_CONFIG.validation.phoneRegex.test(phone);
+}
+
+/**
+ * Validate amount
+ */
+export function validateAmount(amount) {
+    return amount >= GAME_CONFIG.minStake && amount <= GAME_CONFIG.maxStake;
+}
+
+/**
+ * Format currency
+ */
+export function formatCurrency(amount) {
+    return `${GAME_CONFIG.currencySymbol} ${amount.toLocaleString()}`;
+}
+
+/**
+ * Get backup URLs for failover
+ */
+export function getBackupUrls(currentUrl) {
+    const allUrls = [WS_URL, ...WS_BACKUP_URLS];
+    return allUrls.filter(url => url !== currentUrl);
+}
+
+/**
+ * Check if environment is production
+ */
+export function isProduction() {
+    return ENVIRONMENT === 'production';
+}
+
+/**
+ * Check if environment is development
+ */
+export function isDevelopment() {
+    return ENVIRONMENT === 'development';
+}
+
+/**
+ * Check if running on GitHub Pages
+ */
+export function isGitHubPages() {
+    return ENVIRONMENT === 'github';
+}
+
+/**
+ * Get connection status message
+ */
+export function getConnectionStatus() {
+    return {
+        environment: ENVIRONMENT,
+        backend: PRIMARY_BACKEND.domain,
+        secure: isConnectionSecure(),
+        timestamp: new Date().toISOString()
+    };
+}
+
+// ===== INITIALIZATION =====
+
+// Initialize configuration
+(function initConfig() {
+    console.group('🔧 Bingo Game Configuration');
+    console.log('Environment:', ENVIRONMENT);
+    console.log('WebSocket URL:', WS_URL);
+    console.log('API Base URL:', API_BASE_URL);
+    console.log('Backup URLs:', WS_BACKUP_URLS.length);
+    console.log('Secure Connection:', isConnectionSecure());
+    console.log('Primary Backend:', PRIMARY_BACKEND.domain);
+    console.groupEnd();
+    
+    // Store config in global scope for debugging
+    if (isDevelopment()) {
+        window.BingoConfig = {
+            getBackendConfig,
+            getGameConfig,
+            isConnectionSecure,
+            validatePhoneNumber,
+            validateAmount,
+            formatCurrency
+        };
+    }
+})();
 
 // Export all configurations
 export default {
-    API_BASE_URL,
+    // Environment
+    ENVIRONMENT,
+    isProduction,
+    isDevelopment,
+    isGitHubPages,
+    
+    // URLs
     WS_URL,
-    ICE_SERVERS,
+    WS_BACKUP_URLS,
+    API_BASE_URL,
+    API_BACKUP_URLS,
+    
+    // Configurations
     GAME_CONFIG,
-    STORAGE_KEYS,
-    DEFAULT_SETTINGS,
-    ERROR_MESSAGES,
-    SUCCESS_MESSAGES,
-    ADMIN_CONFIG,
-    AUDIO_CONFIG,
-    FEATURE_FLAGS,
+    ICE_SERVERS: CURRENT_ICE_SERVERS,
+    SECURITY_CONFIG,
+    ERROR_CONFIG,
+    UI_CONFIG,
     ANALYTICS_CONFIG,
-    ENVIRONMENT
+    STORAGE_KEYS,
+    
+    // Functions
+    getBackendConfig,
+    isConnectionSecure,
+    getGameConfig,
+    validatePhoneNumber,
+    validateAmount,
+    formatCurrency,
+    getBackupUrls,
+    getConnectionStatus
 };
