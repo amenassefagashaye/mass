@@ -20,32 +20,27 @@ console.log(`🌍 Environment: ${ENVIRONMENT}`);
 
 // ===== BACKEND CONFIGURATION =====
 
-// Primary Backend Server (Updated with provided URL)
+// Primary Backend Server (Main server - 81)
 const PRIMARY_BACKEND = {
     ws: 'wss://ameng-gogs-mass2-81.deno.dev/',
     api: 'https://ameng-gogs-mass2-81.deno.dev/',
-    domain: 'ameng-gogs-mass2-81.deno.dev'
+    domain: 'ameng-gogs-mass2-81.deno.dev',
+    name: 'Primary Server (81)'
 };
 
-// Backup Servers (in case primary fails)
-const BACKUP_SERVERS = [
-    {
-        ws: 'wss://ameng-gogs-mass2-81.deno.dev/',
-        api: 'https://ameng-gogs-mass2-81.deno.dev/',
-        name: 'Primary Server'
-    },
-    {
-        ws: 'wss://backup1-ameng-gogs-mass2-81.deno.dev/',
-        api: 'https://backup1-ameng-gogs-mass2-81.deno.dev/',
-        name: 'Backup Server 1'
-    }
-];
+// Backup Server (60)
+const BACKUP_SERVER = {
+    ws: 'wss://ameng-gogs-mass2-60.deno.dev/',
+    api: 'https://ameng-gogs-mass2-60.deno.dev/',
+    domain: 'ameng-gogs-mass2-60.deno.dev',
+    name: 'Backup Server (60)'
+};
 
 // ===== WEBSOCKET CONNECTION CONFIG =====
 export const WS_CONFIG = {
     // Connection settings
     RECONNECT_DELAY: 2000, // 2 seconds
-    MAX_RECONNECT_ATTEMPTS: 5,
+    MAX_RECONNECT_ATTEMPTS: 3,
     CONNECTION_TIMEOUT: 10000, // 10 seconds
     
     // Heartbeat settings
@@ -63,14 +58,14 @@ export const WS_CONFIG = {
         ADMIN_COMMAND: 'admin_command',
         ERROR: 'error',
         PING: 'ping',
-        PONG: 'pong'
+        PONG: 'pong',
+        CONNECTION_CHECK: 'connection_check'
     }
 };
 
 // ===== ADMIN CONFIGURATION =====
-// IMPORTANT: In production, this should be loaded from environment variables or secure backend
 export const ADMIN_CONFIG = {
-    PASSWORD: 'assefa2024', // Default password - Change in production!
+    PASSWORD: 'assefa2024',
     SESSION_TIMEOUT: 3600000, // 1 hour
     ALLOWED_ACTIONS: [
         'start_game',
@@ -121,28 +116,44 @@ export const SECURITY_CONFIG = {
     SESSION_COOKIE_NAME: 'bingo_session',
     SESSION_MAX_AGE: 86400000, // 24 hours
     
-    // CORS settings (for API calls)
+    // CORS settings
     ALLOWED_ORIGINS: [
         'https://ameng-gogs-mass2-81.deno.dev',
+        'https://ameng-gogs-mass2-60.deno.dev',
         'https://*.github.io',
         'http://localhost:3000',
         'http://localhost:8080'
     ]
 };
 
-// ===== UTILITY FUNCTIONS =====
+// ===== CONNECTION MANAGEMENT =====
+let activeBackend = PRIMARY_BACKEND;
+let connectionAttempts = 0;
 
 /**
- * Get the active backend URL based on environment
+ * Get the active backend URL
  * @returns {Object} Active backend configuration
  */
 export function getActiveBackend() {
-    // Try to use primary backend first
-    if (ENVIRONMENT === 'development') {
-        console.log('🔧 Using development backend configuration');
-    }
-    
-    return PRIMARY_BACKEND;
+    return activeBackend;
+}
+
+/**
+ * Switch to backup server
+ */
+export function switchToBackup() {
+    console.log(`🔄 Switching from ${activeBackend.name} to ${BACKUP_SERVER.name}`);
+    activeBackend = BACKUP_SERVER;
+    return activeBackend;
+}
+
+/**
+ * Switch back to primary server
+ */
+export function switchToPrimary() {
+    console.log(`🔄 Switching back to ${PRIMARY_BACKEND.name}`);
+    activeBackend = PRIMARY_BACKEND;
+    return activeBackend;
 }
 
 /**
@@ -151,15 +162,10 @@ export function getActiveBackend() {
  */
 export function getWebSocketUrl() {
     const backend = getActiveBackend();
-    const url = new URL(backend.ws);
+    const url = backend.ws;
     
-    // Add connection parameters
-    url.searchParams.append('client', 'web');
-    url.searchParams.append('env', ENVIRONMENT);
-    url.searchParams.append('v', '1.0');
-    url.searchParams.append('_t', Date.now().toString());
-    
-    return url.toString();
+    console.log(`🔗 Using WebSocket URL: ${url}`);
+    return url;
 }
 
 /**
@@ -172,31 +178,46 @@ export function getApiUrl(endpoint = '') {
     const baseUrl = backend.api.endsWith('/') ? backend.api.slice(0, -1) : backend.api;
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
     
-    return `${baseUrl}/${cleanEndpoint}`;
+    return cleanEndpoint ? `${baseUrl}/${cleanEndpoint}` : baseUrl;
 }
 
 /**
- * Wake up the backend server (for cold start prevention)
+ * Wake up the backend server to prevent cold start
  * @returns {Promise<boolean>} Success status
  */
 export async function wakeBackend() {
     try {
-        const startTime = Date.now();
-        const response = await fetch(getApiUrl('health'), {
-            method: 'GET',
-            cache: 'no-cache',
-            headers: {
-                'X-Wake-Up': 'true',
-                'X-Client': 'bingo-web'
-            },
-            // Short timeout for wake-up request
-            signal: AbortSignal.timeout(5000)
-        });
+        console.log(`🚀 Waking up backend: ${activeBackend.name}`);
         
-        const endTime = Date.now();
-        console.log(`🚀 Backend wake-up: ${response.status} (${endTime - startTime}ms)`);
+        // Try both servers when waking up
+        const serversToWake = [PRIMARY_BACKEND, BACKUP_SERVER];
+        let anySuccess = false;
         
-        return response.ok;
+        for (const server of serversToWake) {
+            try {
+                const startTime = Date.now();
+                const response = await fetch(server.api, {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    headers: {
+                        'X-Wake-Up': 'true',
+                        'X-Client': 'bingo-web',
+                        'X-Timestamp': Date.now().toString()
+                    },
+                    signal: AbortSignal.timeout(3000)
+                });
+                
+                const endTime = Date.now();
+                console.log(`✅ ${server.name} wake-up: ${response.status} (${endTime - startTime}ms)`);
+                anySuccess = true;
+                
+            } catch (error) {
+                console.warn(`⚠️ ${server.name} wake-up failed: ${error.message}`);
+            }
+        }
+        
+        return anySuccess;
+        
     } catch (error) {
         console.warn('⚠️ Backend wake-up failed:', error.message);
         return false;
@@ -204,36 +225,35 @@ export async function wakeBackend() {
 }
 
 /**
- * Test WebSocket connection
+ * Quick connection test to WebSocket server
  * @returns {Promise<boolean>} Connection status
  */
-export async function testWebSocketConnection() {
+export async function quickConnectionTest() {
     return new Promise((resolve) => {
-        const wsUrl = getWebSocketUrl();
-        console.log(`🔗 Testing WebSocket connection to: ${wsUrl}`);
+        console.log(`🔍 Quick connection test to: ${activeBackend.name}`);
         
-        const socket = new WebSocket(wsUrl);
+        const socket = new WebSocket(activeBackend.ws);
         let connected = false;
         
         const timeout = setTimeout(() => {
             if (!connected) {
                 socket.close();
-                console.log('⏰ WebSocket connection timeout');
+                console.log(`⏰ ${activeBackend.name} connection timeout`);
                 resolve(false);
             }
-        }, 5000);
+        }, 3000); // Reduced timeout for quicker testing
         
         socket.onopen = () => {
             clearTimeout(timeout);
             connected = true;
-            console.log('✅ WebSocket connection successful');
+            console.log(`✅ ${activeBackend.name} connection successful`);
             socket.close();
             resolve(true);
         };
         
-        socket.onerror = (error) => {
+        socket.onerror = () => {
             clearTimeout(timeout);
-            console.error('❌ WebSocket connection failed:', error);
+            console.log(`❌ ${activeBackend.name} connection failed`);
             resolve(false);
         };
         
@@ -247,83 +267,155 @@ export async function testWebSocketConnection() {
 }
 
 /**
- * Get connection status for UI display
- * @returns {Object} Connection status object
+ * Initialize connection with smart server selection
+ * @returns {Promise<Object>} Connection result
  */
-export function getConnectionStatus() {
-    const backend = getActiveBackend();
-    const domain = new URL(backend.ws).hostname;
+export async function initializeConnection() {
+    console.log('🔌 Starting connection initialization...');
     
+    // Step 1: Wake up both servers
+    await wakeBackend();
+    
+    // Step 2: Try primary server first
+    console.log(`🔄 Testing primary server: ${PRIMARY_BACKEND.name}`);
+    switchToPrimary();
+    
+    const primaryTest = await quickConnectionTest();
+    
+    if (primaryTest) {
+        console.log(`✅ Using primary server: ${PRIMARY_BACKEND.name}`);
+        return {
+            success: true,
+            server: PRIMARY_BACKEND.name,
+            url: PRIMARY_BACKEND.ws,
+            isBackup: false,
+            timestamp: new Date().toISOString()
+        };
+    }
+    
+    // Step 3: If primary fails, try backup
+    console.log(`🔄 Primary server failed, trying backup: ${BACKUP_SERVER.name}`);
+    switchToBackup();
+    
+    const backupTest = await quickConnectionTest();
+    
+    if (backupTest) {
+        console.log(`✅ Using backup server: ${BACKUP_SERVER.name}`);
+        return {
+            success: true,
+            server: BACKUP_SERVER.name,
+            url: BACKUP_SERVER.ws,
+            isBackup: true,
+            timestamp: new Date().toISOString()
+        };
+    }
+    
+    // Step 4: Both servers failed
+    console.error('❌ All connection attempts failed');
     return {
-        domain: domain,
-        wsUrl: backend.ws,
-        apiUrl: backend.api,
-        environment: ENVIRONMENT,
+        success: false,
+        error: 'Unable to connect to game servers. Please check your internet connection and try again.',
         timestamp: new Date().toISOString()
     };
 }
 
 /**
- * Initialize connection with retry logic
- * @returns {Promise<Object>} Connection result
+ * Create a WebSocket connection with proper error handling
+ * @returns {Promise<WebSocket>} WebSocket instance
  */
-export async function initializeConnection() {
-    console.log('🔌 Initializing connection...');
+export async function createWebSocketConnection() {
+    const connection = await initializeConnection();
     
-    // Step 1: Wake up backend (for Deno Deploy cold start)
-    const wokeUp = await wakeBackend();
-    if (!wokeUp) {
-        console.warn('⚠️ Backend wake-up failed, proceeding anyway...');
+    if (!connection.success) {
+        throw new Error(connection.error);
     }
     
-    // Step 2: Test WebSocket connection
-    const wsConnected = await testWebSocketConnection();
+    console.log(`🎮 Creating WebSocket connection to: ${connection.server}`);
     
-    // Step 3: Determine fallback strategy
-    if (!wsConnected) {
-        console.warn('⚠️ Primary WebSocket connection failed');
+    return new Promise((resolve, reject) => {
+        const socket = new WebSocket(getWebSocketUrl());
+        let isConnected = false;
         
-        // Try backup servers
-        for (let i = 0; i < BACKUP_SERVERS.length; i++) {
-            const backup = BACKUP_SERVERS[i];
-            console.log(`🔄 Trying backup server: ${backup.name}`);
-            
-            // Temporarily switch to backup for testing
-            const originalWs = PRIMARY_BACKEND.ws;
-            const originalApi = PRIMARY_BACKEND.api;
-            
-            PRIMARY_BACKEND.ws = backup.ws;
-            PRIMARY_BACKEND.api = backup.api;
-            
-            const backupConnected = await testWebSocketConnection();
-            
-            if (backupConnected) {
-                console.log(`✅ Connected to backup server: ${backup.name}`);
-                return {
-                    success: true,
-                    server: backup.name,
-                    url: backup.ws,
-                    isBackup: true
-                };
+        const timeout = setTimeout(() => {
+            if (!isConnected) {
+                socket.close();
+                reject(new Error(`Connection timeout to ${connection.server}`));
             }
-            
-            // Restore original
-            PRIMARY_BACKEND.ws = originalWs;
-            PRIMARY_BACKEND.api = originalApi;
-        }
+        }, 10000);
         
-        return {
-            success: false,
-            error: 'Unable to connect to any server',
-            timestamp: new Date().toISOString()
+        socket.onopen = () => {
+            clearTimeout(timeout);
+            isConnected = true;
+            console.log(`✅ WebSocket connected to ${connection.server}`);
+            resolve(socket);
         };
-    }
+        
+        socket.onerror = (error) => {
+            clearTimeout(timeout);
+            console.error(`❌ WebSocket error on ${connection.server}:`, error);
+            reject(new Error(`Failed to connect to ${connection.server}`));
+        };
+        
+        socket.onclose = (event) => {
+            if (!isConnected) {
+                clearTimeout(timeout);
+                reject(new Error(`Connection closed to ${connection.server}`));
+            }
+        };
+    });
+}
+
+/**
+ * Get connection status for UI display
+ * @returns {Object} Connection status object
+ */
+export function getConnectionStatus() {
+    const backend = getActiveBackend();
     
     return {
-        success: true,
-        server: 'Primary Server',
-        url: PRIMARY_BACKEND.ws,
-        isBackup: false
+        server: backend.name,
+        wsUrl: backend.ws,
+        apiUrl: backend.api,
+        environment: ENVIRONMENT,
+        isBackup: backend === BACKUP_SERVER,
+        timestamp: new Date().toISOString()
+    };
+}
+
+/**
+ * Monitor connection and auto-switch if needed
+ * @param {WebSocket} socket - WebSocket instance to monitor
+ * @returns {Function} Function to stop monitoring
+ */
+export function monitorConnection(socket) {
+    let lastPingTime = Date.now();
+    let isMonitoring = true;
+    
+    const pingInterval = setInterval(() => {
+        if (!isMonitoring) return;
+        
+        if (socket.readyState === WebSocket.OPEN) {
+            const currentTime = Date.now();
+            
+            // Send ping if connection seems stale
+            if (currentTime - lastPingTime > WS_CONFIG.HEARTBEAT_TIMEOUT) {
+                try {
+                    socket.send(JSON.stringify({
+                        type: WS_CONFIG.MESSAGE_TYPES.PING,
+                        timestamp: currentTime
+                    }));
+                    lastPingTime = currentTime;
+                } catch (error) {
+                    console.warn('Failed to send ping:', error);
+                }
+            }
+        }
+    }, WS_CONFIG.HEARTBEAT_INTERVAL);
+    
+    // Return function to stop monitoring
+    return () => {
+        isMonitoring = false;
+        clearInterval(pingInterval);
     };
 }
 
@@ -331,16 +423,20 @@ export async function initializeConnection() {
 export default {
     ENVIRONMENT,
     PRIMARY_BACKEND,
-    BACKUP_SERVERS,
+    BACKUP_SERVER,
     WS_CONFIG,
     ADMIN_CONFIG,
     GAME_CONFIG,
     SECURITY_CONFIG,
     getActiveBackend,
+    switchToBackup,
+    switchToPrimary,
     getWebSocketUrl,
     getApiUrl,
     wakeBackend,
-    testWebSocketConnection,
+    quickConnectionTest,
+    initializeConnection,
+    createWebSocketConnection,
     getConnectionStatus,
-    initializeConnection
+    monitorConnection
 };
