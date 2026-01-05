@@ -22,524 +22,325 @@ console.log(`🌍 Environment: ${ENVIRONMENT}`);
 
 // Primary Backend Server (Updated with provided URL)
 const PRIMARY_BACKEND = {
-    ws: 'wss://ameng-gogs-mass2-81.deno.dev/ws',
-    api: 'https://ameng-gogs-mass2-81.deno.dev/api',
+    ws: 'wss://ameng-gogs-mass2-81.deno.dev/',
+    api: 'https://ameng-gogs-mass2-81.deno.dev/',
     domain: 'ameng-gogs-mass2-81.deno.dev'
 };
 
 // Backup Servers (in case primary fails)
 const BACKUP_SERVERS = [
     {
-        ws: 'wss://ameng-gogs-mass2-81.deno.dev/ws',
-        api: 'https://ameng-gogs-mass2-81.deno.dev/api',
+        ws: 'wss://ameng-gogs-mass2-81.deno.dev/',
+        api: 'https://ameng-gogs-mass2-81.deno.dev/',
         name: 'Primary Server'
     },
     {
-        ws: 'wss://bingo-backup-1.deno.dev/ws',
-        api: 'https://bingo-backup-1.deno.dev/api',
+        ws: 'wss://backup1-ameng-gogs-mass2-81.deno.dev/',
+        api: 'https://backup1-ameng-gogs-mass2-81.deno.dev/',
         name: 'Backup Server 1'
-    },
-    {
-        ws: 'wss://bingo-backup-2.deno.dev/ws',
-        api: 'https://bingo-backup-2.deno.dev/api',
-        name: 'Backup Server 2'
     }
 ];
 
-// Local development server
-const LOCAL_SERVER = {
-    ws: 'ws://localhost:8000/ws',
-    api: 'http://localhost:8000/api',
-    domain: 'localhost'
+// ===== WEBSOCKET CONNECTION CONFIG =====
+export const WS_CONFIG = {
+    // Connection settings
+    RECONNECT_DELAY: 2000, // 2 seconds
+    MAX_RECONNECT_ATTEMPTS: 5,
+    CONNECTION_TIMEOUT: 10000, // 10 seconds
+    
+    // Heartbeat settings
+    HEARTBEAT_INTERVAL: 30000, // 30 seconds
+    HEARTBEAT_TIMEOUT: 5000, // 5 seconds
+    
+    // Message types
+    MESSAGE_TYPES: {
+        AUTH: 'auth',
+        GAME_STATE: 'game_state',
+        PLAYER_JOIN: 'player_join',
+        PLAYER_LEAVE: 'player_leave',
+        NUMBER_CALLED: 'number_called',
+        BINGO: 'bingo',
+        ADMIN_COMMAND: 'admin_command',
+        ERROR: 'error',
+        PING: 'ping',
+        PONG: 'pong'
+    }
 };
 
-// GitHub Pages configuration
-const GITHUB_CONFIG = {
-    ws: 'wss://ameng-gogs-mass2-81.deno.dev/ws',
-    api: 'https://ameng-gogs-mass2-81.deno.dev/api',
-    domain: 'ameng-gogs-mass2-81.deno.dev'
+// ===== ADMIN CONFIGURATION =====
+// IMPORTANT: In production, this should be loaded from environment variables or secure backend
+export const ADMIN_CONFIG = {
+    PASSWORD: 'assefa2024', // Default password - Change in production!
+    SESSION_TIMEOUT: 3600000, // 1 hour
+    ALLOWED_ACTIONS: [
+        'start_game',
+        'pause_game',
+        'end_game',
+        'reset_game',
+        'call_number',
+        'announcement',
+        'kick_player',
+        'ban_player',
+        'change_settings'
+    ]
 };
-
-// ===== EXPORTED CONFIGURATION =====
-
-// WebSocket URLs
-export const WS_URL = (() => {
-    switch (ENVIRONMENT) {
-        case 'development':
-            return LOCAL_SERVER.ws;
-        case 'github':
-            return GITHUB_CONFIG.ws;
-        case 'production':
-        case 'staging':
-        default:
-            return PRIMARY_BACKEND.ws;
-    }
-})();
-
-// Backup WebSocket URLs (for failover)
-export const WS_BACKUP_URLS = [
-    ...BACKUP_SERVERS.map(server => server.ws),
-    GITHUB_CONFIG.ws,
-    LOCAL_SERVER.ws
-].filter((url, index, self) => 
-    url !== WS_URL && self.indexOf(url) === index // Remove duplicates and primary
-);
-
-// API Base URLs
-export const API_BASE_URL = (() => {
-    switch (ENVIRONMENT) {
-        case 'development':
-            return LOCAL_SERVER.api;
-        case 'github':
-            return GITHUB_CONFIG.api;
-        case 'production':
-        case 'staging':
-        default:
-            return PRIMARY_BACKEND.api;
-    }
-})();
-
-// Backup API URLs
-export const API_BACKUP_URLS = [
-    ...BACKUP_SERVERS.map(server => server.api),
-    GITHUB_CONFIG.api,
-    LOCAL_SERVER.api
-].filter((url, index, self) => 
-    url !== API_BASE_URL && self.indexOf(url) === index
-);
 
 // ===== GAME CONFIGURATION =====
-
 export const GAME_CONFIG = {
-    // Game Types
-    gameTypes: {
-        '75ball': {
-            name: '75 Ball Bingo',
-            numbers: 75,
-            patterns: ['Full House', 'Line', 'Four Corners', 'X Pattern'],
-            gridSize: 5,
-            columns: ['B', 'I', 'N', 'G', 'O'],
-            stakes: [5, 10, 25, 50, 100]
-        },
-        '90ball': {
-            name: '90 Ball Bingo',
-            numbers: 90,
-            patterns: ['One Line', 'Two Lines', 'Full House'],
-            gridSize: 9,
-            columns: 10,
-            stakes: [5, 10, 25, 50, 100, 200]
-        },
-        'bingo75': {
-            name: 'Ethiopian Bingo 75',
-            numbers: 75,
-            patterns: ['Full House', 'Cross', 'Diagonal'],
-            gridSize: 5,
-            stakes: [10, 25, 50, 100, 200]
-        },
-        'bingo90': {
-            name: 'Ethiopian Bingo 90',
-            numbers: 90,
-            patterns: ['Full House', 'Star', 'Square'],
-            gridSize: 9,
-            stakes: [10, 25, 50, 100, 200, 500]
-        }
-    },
-
-    // Default game settings
-    defaultGameType: '75ball',
-    defaultStake: 25,
-    minStake: 5,
-    maxStake: 1000,
+    // Game settings
+    BOARD_SIZE: 5,
+    TOTAL_NUMBERS: 75,
+    NUMBERS_PER_ROW: 5,
     
-    // Room settings
-    maxPlayersPerRoom: 50,
-    maxRooms: 100,
-    roomIdLength: 6,
+    // Game timing (in milliseconds)
+    GAME_START_DELAY: 5000,
+    NUMBER_CALL_INTERVAL: 3000,
+    BINGO_VERIFICATION_TIME: 3000,
     
-    // Game timing
-    gameStartDelay: 5000, // 5 seconds
-    numberCallInterval: 3000, // 3 seconds
-    winClaimTimeout: 10000, // 10 seconds
-    
-    // Payment settings
-    minPaymentAmount: 10,
-    maxPaymentAmount: 10000,
-    paymentMethods: ['TeleBirr', 'CBE Birr', 'Dashen Bank', 'Awash Bank', 'Cash'],
-    
-    // Withdrawal settings
-    minWithdrawalAmount: 50,
-    maxWithdrawalAmount: 5000,
-    withdrawalFee: 0.05, // 5%
-    
-    // Currency
-    currency: 'ETB',
-    currencySymbol: 'ብር',
-    
-    // Security
-    sessionTimeout: 3600000, // 1 hour
-    maxLoginAttempts: 5,
-    rateLimitWindow: 60000, // 1 minute
-    rateLimitMax: 100 // requests per minute
+    // Game states
+    STATES: {
+        LOBBY: 'lobby',
+        STARTING: 'starting',
+        PLAYING: 'playing',
+        PAUSED: 'paused',
+        ENDED: 'ended'
+    }
 };
-
-// ===== WEBRTC CONFIGURATION =====
-
-// ICE Servers for WebRTC (STUN/TURN)
-export const ICE_SERVERS = {
-    production: [
-        // Free STUN servers
-        {
-            urls: [
-                'stun:stun1.l.google.com:19302',
-                'stun:stun2.l.google.com:19302',
-                'stun:stun3.l.google.com:19302',
-                'stun:stun4.l.google.com:19302'
-            ]
-        },
-        {
-            urls: 'stun:global.stun.twilio.com:3478'
-        },
-        {
-            urls: 'stun:stun.services.mozilla.com:3478'
-        }
-    ],
-    
-    // Add TURN servers if available (commented out - add your credentials)
-    /*
-    turn: [
-        {
-            urls: 'turn:your-turn-server.com:3478',
-            username: 'your-username',
-            credential: 'your-password'
-        }
-    ]
-    */
-};
-
-// Current ICE servers based on environment
-export const CURRENT_ICE_SERVERS = ICE_SERVERS.production;
 
 // ===== SECURITY CONFIGURATION =====
-
 export const SECURITY_CONFIG = {
-    // JWT Settings
-    jwt: {
-        headerName: 'Authorization',
-        tokenPrefix: 'Bearer ',
-        localStorageKey: 'bingo_auth_token',
-        refreshInterval: 300000 // 5 minutes
-    },
-    
-    // CORS settings
-    cors: {
-        allowedOrigins: [
-            'https://ameng-gogs-mass2-81.deno.dev',
-            'https://*.github.io',
-            'http://localhost:*',
-            'http://127.0.0.1:*'
-        ],
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        headers: ['Content-Type', 'Authorization']
-    },
-    
-    // Encryption
-    encryption: {
-        algorithm: 'AES-GCM',
-        keyLength: 256,
-        ivLength: 12
-    },
-    
     // Rate limiting
-    rateLimiting: {
-        windowMs: 60000,
-        maxRequests: 100,
-        message: 'Too many requests, please try again later.'
-    },
+    RATE_LIMIT_WINDOW: 60000, // 1 minute
+    MAX_REQUESTS_PER_WINDOW: 100,
     
-    // Input validation
-    validation: {
-        maxNameLength: 50,
-        minNameLength: 2,
-        phoneRegex: /^(\+251|251|0)?9\d{8}$/,
-        emailRegex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-        passwordMinLength: 6
-    }
-};
-
-// ===== ERROR HANDLING CONFIGURATION =====
-
-export const ERROR_CONFIG = {
-    // WebSocket error codes
-    wsErrors: {
-        1000: 'Normal closure',
-        1001: 'Going away',
-        1002: 'Protocol error',
-        1003: 'Unsupported data',
-        1005: 'No status received',
-        1006: 'Abnormal closure',
-        1007: 'Invalid frame payload data',
-        1008: 'Policy violation',
-        1009: 'Message too big',
-        1010: 'Missing extension',
-        1011: 'Internal error',
-        1012: 'Service restart',
-        1013: 'Try again later',
-        1014: 'Bad gateway',
-        1015: 'TLS handshake failed'
-    },
+    // Player validation
+    MIN_PLAYER_NAME_LENGTH: 2,
+    MAX_PLAYER_NAME_LENGTH: 20,
     
-    // Reconnection settings
-    reconnection: {
-        maxAttempts: 5,
-        initialDelay: 1000,
-        maxDelay: 30000,
-        backoffFactor: 2
-    },
+    // Session management
+    SESSION_COOKIE_NAME: 'bingo_session',
+    SESSION_MAX_AGE: 86400000, // 24 hours
     
-    // Error messages
-    messages: {
-        connectionFailed: 'Connection to server failed. Please check your internet connection.',
-        serverError: 'Server error occurred. Please try again later.',
-        timeout: 'Request timeout. Please try again.',
-        invalidResponse: 'Invalid response from server.',
-        authenticationFailed: 'Authentication failed. Please login again.',
-        insufficientBalance: 'Insufficient balance. Please add funds.',
-        roomFull: 'Room is full. Please try another room.',
-        gameInProgress: 'Game is already in progress.'
-    }
-};
-
-// ===== UI/UX CONFIGURATION =====
-
-export const UI_CONFIG = {
-    // Theme
-    theme: {
-        primaryColor: '#4CAF50',
-        secondaryColor: '#2196F3',
-        accentColor: '#FF9800',
-        dangerColor: '#F44336',
-        successColor: '#4CAF50',
-        backgroundColor: '#f5f5f5',
-        textColor: '#333333',
-        borderRadius: '8px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-    },
-    
-    // Animations
-    animations: {
-        duration: {
-            fast: '150ms',
-            normal: '300ms',
-            slow: '500ms'
-        },
-        easing: 'cubic-bezier(0.4, 0, 0.2, 1)'
-    },
-    
-    // Responsive breakpoints
-    breakpoints: {
-        mobile: '480px',
-        tablet: '768px',
-        desktop: '1024px',
-        largeDesktop: '1200px'
-    },
-    
-    // Fonts
-    fonts: {
-        primary: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-        heading: "'Arial', sans-serif",
-        code: "'Courier New', monospace"
-    }
-};
-
-// ===== ANALYTICS & MONITORING =====
-
-export const ANALYTICS_CONFIG = {
-    // Google Analytics (optional)
-    googleAnalyticsId: null, // 'UA-XXXXXXXXX-X'
-    
-    // Error tracking
-    sentryDsn: null, // 'https://xxxxxxxxxxxx@xxxx.ingest.sentry.io/xxxxx'
-    
-    // Performance monitoring
-    enablePerformance: true,
-    performanceThreshold: 100, // ms
-    
-    // Logging levels
-    logLevel: ENVIRONMENT === 'production' ? 'warn' : 'debug',
-    
-    // Event tracking
-    trackEvents: [
-        'game_started',
-        'game_completed',
-        'payment_made',
-        'withdrawal_requested',
-        'player_registered'
+    // CORS settings (for API calls)
+    ALLOWED_ORIGINS: [
+        'https://ameng-gogs-mass2-81.deno.dev',
+        'https://*.github.io',
+        'http://localhost:3000',
+        'http://localhost:8080'
     ]
 };
 
-// ===== LOCAL STORAGE KEYS =====
-
-export const STORAGE_KEYS = {
-    playerId: 'bingo_player_id',
-    playerName: 'bingo_player_name',
-    playerPhone: 'bingo_player_phone',
-    balance: 'bingo_balance',
-    stake: 'bingo_stake',
-    gameType: 'bingo_game_type',
-    authToken: 'bingo_auth_token',
-    refreshToken: 'bingo_refresh_token',
-    lastRoom: 'bingo_last_room',
-    settings: 'bingo_settings',
-    theme: 'bingo_theme'
-};
-
-// ===== EXPORTED FUNCTIONS =====
+// ===== UTILITY FUNCTIONS =====
 
 /**
- * Get current backend configuration
+ * Get the active backend URL based on environment
+ * @returns {Object} Active backend configuration
  */
-export function getBackendConfig() {
-    return {
-        environment: ENVIRONMENT,
-        wsUrl: WS_URL,
-        apiUrl: API_BASE_URL,
-        backupUrls: WS_BACKUP_URLS,
-        isSecure: WS_URL.startsWith('wss://')
-    };
+export function getActiveBackend() {
+    // Try to use primary backend first
+    if (ENVIRONMENT === 'development') {
+        console.log('🔧 Using development backend configuration');
+    }
+    
+    return PRIMARY_BACKEND;
 }
 
 /**
- * Check if connection is secure
+ * Get WebSocket URL with connection parameters
+ * @returns {string} WebSocket URL
  */
-export function isConnectionSecure() {
-    return window.location.protocol === 'https:' && WS_URL.startsWith('wss://');
+export function getWebSocketUrl() {
+    const backend = getActiveBackend();
+    const url = new URL(backend.ws);
+    
+    // Add connection parameters
+    url.searchParams.append('client', 'web');
+    url.searchParams.append('env', ENVIRONMENT);
+    url.searchParams.append('v', '1.0');
+    url.searchParams.append('_t', Date.now().toString());
+    
+    return url.toString();
 }
 
 /**
- * Get appropriate game configuration based on game type
+ * Get API URL for HTTP requests
+ * @param {string} endpoint - API endpoint
+ * @returns {string} Full API URL
  */
-export function getGameConfig(gameType = '75ball') {
-    return GAME_CONFIG.gameTypes[gameType] || GAME_CONFIG.gameTypes['75ball'];
+export function getApiUrl(endpoint = '') {
+    const backend = getActiveBackend();
+    const baseUrl = backend.api.endsWith('/') ? backend.api.slice(0, -1) : backend.api;
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+    
+    return `${baseUrl}/${cleanEndpoint}`;
 }
 
 /**
- * Validate phone number
+ * Wake up the backend server (for cold start prevention)
+ * @returns {Promise<boolean>} Success status
  */
-export function validatePhoneNumber(phone) {
-    return SECURITY_CONFIG.validation.phoneRegex.test(phone);
+export async function wakeBackend() {
+    try {
+        const startTime = Date.now();
+        const response = await fetch(getApiUrl('health'), {
+            method: 'GET',
+            cache: 'no-cache',
+            headers: {
+                'X-Wake-Up': 'true',
+                'X-Client': 'bingo-web'
+            },
+            // Short timeout for wake-up request
+            signal: AbortSignal.timeout(5000)
+        });
+        
+        const endTime = Date.now();
+        console.log(`🚀 Backend wake-up: ${response.status} (${endTime - startTime}ms)`);
+        
+        return response.ok;
+    } catch (error) {
+        console.warn('⚠️ Backend wake-up failed:', error.message);
+        return false;
+    }
 }
 
 /**
- * Validate amount
+ * Test WebSocket connection
+ * @returns {Promise<boolean>} Connection status
  */
-export function validateAmount(amount) {
-    return amount >= GAME_CONFIG.minStake && amount <= GAME_CONFIG.maxStake;
+export async function testWebSocketConnection() {
+    return new Promise((resolve) => {
+        const wsUrl = getWebSocketUrl();
+        console.log(`🔗 Testing WebSocket connection to: ${wsUrl}`);
+        
+        const socket = new WebSocket(wsUrl);
+        let connected = false;
+        
+        const timeout = setTimeout(() => {
+            if (!connected) {
+                socket.close();
+                console.log('⏰ WebSocket connection timeout');
+                resolve(false);
+            }
+        }, 5000);
+        
+        socket.onopen = () => {
+            clearTimeout(timeout);
+            connected = true;
+            console.log('✅ WebSocket connection successful');
+            socket.close();
+            resolve(true);
+        };
+        
+        socket.onerror = (error) => {
+            clearTimeout(timeout);
+            console.error('❌ WebSocket connection failed:', error);
+            resolve(false);
+        };
+        
+        socket.onclose = () => {
+            if (!connected) {
+                clearTimeout(timeout);
+                resolve(false);
+            }
+        };
+    });
 }
 
 /**
- * Format currency
- */
-export function formatCurrency(amount) {
-    return `${GAME_CONFIG.currencySymbol} ${amount.toLocaleString()}`;
-}
-
-/**
- * Get backup URLs for failover
- */
-export function getBackupUrls(currentUrl) {
-    const allUrls = [WS_URL, ...WS_BACKUP_URLS];
-    return allUrls.filter(url => url !== currentUrl);
-}
-
-/**
- * Check if environment is production
- */
-export function isProduction() {
-    return ENVIRONMENT === 'production';
-}
-
-/**
- * Check if environment is development
- */
-export function isDevelopment() {
-    return ENVIRONMENT === 'development';
-}
-
-/**
- * Check if running on GitHub Pages
- */
-export function isGitHubPages() {
-    return ENVIRONMENT === 'github';
-}
-
-/**
- * Get connection status message
+ * Get connection status for UI display
+ * @returns {Object} Connection status object
  */
 export function getConnectionStatus() {
+    const backend = getActiveBackend();
+    const domain = new URL(backend.ws).hostname;
+    
     return {
+        domain: domain,
+        wsUrl: backend.ws,
+        apiUrl: backend.api,
         environment: ENVIRONMENT,
-        backend: PRIMARY_BACKEND.domain,
-        secure: isConnectionSecure(),
         timestamp: new Date().toISOString()
     };
 }
 
-// ===== INITIALIZATION =====
-
-// Initialize configuration
-(function initConfig() {
-    console.group('🔧 Bingo Game Configuration');
-    console.log('Environment:', ENVIRONMENT);
-    console.log('WebSocket URL:', WS_URL);
-    console.log('API Base URL:', API_BASE_URL);
-    console.log('Backup URLs:', WS_BACKUP_URLS.length);
-    console.log('Secure Connection:', isConnectionSecure());
-    console.log('Primary Backend:', PRIMARY_BACKEND.domain);
-    console.groupEnd();
+/**
+ * Initialize connection with retry logic
+ * @returns {Promise<Object>} Connection result
+ */
+export async function initializeConnection() {
+    console.log('🔌 Initializing connection...');
     
-    // Store config in global scope for debugging
-    if (isDevelopment()) {
-        window.BingoConfig = {
-            getBackendConfig,
-            getGameConfig,
-            isConnectionSecure,
-            validatePhoneNumber,
-            validateAmount,
-            formatCurrency
+    // Step 1: Wake up backend (for Deno Deploy cold start)
+    const wokeUp = await wakeBackend();
+    if (!wokeUp) {
+        console.warn('⚠️ Backend wake-up failed, proceeding anyway...');
+    }
+    
+    // Step 2: Test WebSocket connection
+    const wsConnected = await testWebSocketConnection();
+    
+    // Step 3: Determine fallback strategy
+    if (!wsConnected) {
+        console.warn('⚠️ Primary WebSocket connection failed');
+        
+        // Try backup servers
+        for (let i = 0; i < BACKUP_SERVERS.length; i++) {
+            const backup = BACKUP_SERVERS[i];
+            console.log(`🔄 Trying backup server: ${backup.name}`);
+            
+            // Temporarily switch to backup for testing
+            const originalWs = PRIMARY_BACKEND.ws;
+            const originalApi = PRIMARY_BACKEND.api;
+            
+            PRIMARY_BACKEND.ws = backup.ws;
+            PRIMARY_BACKEND.api = backup.api;
+            
+            const backupConnected = await testWebSocketConnection();
+            
+            if (backupConnected) {
+                console.log(`✅ Connected to backup server: ${backup.name}`);
+                return {
+                    success: true,
+                    server: backup.name,
+                    url: backup.ws,
+                    isBackup: true
+                };
+            }
+            
+            // Restore original
+            PRIMARY_BACKEND.ws = originalWs;
+            PRIMARY_BACKEND.api = originalApi;
+        }
+        
+        return {
+            success: false,
+            error: 'Unable to connect to any server',
+            timestamp: new Date().toISOString()
         };
     }
-})();
+    
+    return {
+        success: true,
+        server: 'Primary Server',
+        url: PRIMARY_BACKEND.ws,
+        isBackup: false
+    };
+}
 
-// Export all configurations
+// ===== EXPORTS =====
 export default {
-    // Environment
     ENVIRONMENT,
-    isProduction,
-    isDevelopment,
-    isGitHubPages,
-    
-    // URLs
-    WS_URL,
-    WS_BACKUP_URLS,
-    API_BASE_URL,
-    API_BACKUP_URLS,
-    
-    // Configurations
+    PRIMARY_BACKEND,
+    BACKUP_SERVERS,
+    WS_CONFIG,
+    ADMIN_CONFIG,
     GAME_CONFIG,
-    ICE_SERVERS: CURRENT_ICE_SERVERS,
     SECURITY_CONFIG,
-    ERROR_CONFIG,
-    UI_CONFIG,
-    ANALYTICS_CONFIG,
-    STORAGE_KEYS,
-    
-    // Functions
-    getBackendConfig,
-    isConnectionSecure,
-    getGameConfig,
-    validatePhoneNumber,
-    validateAmount,
-    formatCurrency,
-    getBackupUrls,
-    getConnectionStatus
+    getActiveBackend,
+    getWebSocketUrl,
+    getApiUrl,
+    wakeBackend,
+    testWebSocketConnection,
+    getConnectionStatus,
+    initializeConnection
 };
